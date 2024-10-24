@@ -7,9 +7,8 @@ pkg = "filmswap"
 setup(
     name=pkg,
     version="0.1.0",
-    url="https://github.com/seanbreckenridge/filmswap",
-    author="Sean Breckenridge",
-    author_email="seanbrecke@gmail.com",
+    url="https://github.com/purarue/filmswap",
+    author="purarue",
     description=("""bot to swap films to watch anonymously"""),
     long_description=long_description,
     long_description_content_type="text/markdown",

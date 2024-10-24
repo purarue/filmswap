@@ -4,11 +4,11 @@ bot to anonymously swap films with other users to watch
 
 This uses the secret santa verbeage as its familiar. So, you basically set a 'letter', can anonymously communicate back and forth to confirm and then send a gift.
 
-![2024-05-15--14_36_44](https://github.com/seanbreckenridge/filmswap/assets/7804791/aa3c2ce7-1a08-4f02-a9c7-3e0ace374c6e)
+![2024-05-15--14_36_44](https://github.com/purarue/filmswap/assets/7804791/aa3c2ce7-1a08-4f02-a9c7-3e0ace374c6e)
 
-![2024-05-15--14_37_05](https://github.com/seanbreckenridge/filmswap/assets/7804791/f38537ed-ccc1-4b7a-85cb-419d80dc01e1)
+![2024-05-15--14_37_05](https://github.com/purarue/filmswap/assets/7804791/f38537ed-ccc1-4b7a-85cb-419d80dc01e1)
 
-![2024-05-15--14_37_14](https://github.com/seanbreckenridge/filmswap/assets/7804791/526edaf0-bd70-472a-8634-7ac5b672cc83)
+![2024-05-15--14_37_14](https://github.com/purarue/filmswap/assets/7804791/526edaf0-bd70-472a-8634-7ac5b672cc83)
 
 ## Installation
 
@@ -38,7 +38,7 @@ PRESENCE_STATUS="kino, using /help"
 ```
 
 ```bash
-git clone https://github.com/seanbreckenridge/filmswap
+git clone https://github.com/purarue/filmswap
 cd filmswap
 pyenv install 3.11.3
 python3 -m pip install virtualenv
