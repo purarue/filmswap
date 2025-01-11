@@ -97,28 +97,31 @@ def get_users_from_backup(backup: str) -> list[UserInfo]:
 
     return [
         UserInfo(
-            user_id=user["user_id"],
+            user_id=int(user["user_id"]),
             name=user["name"],
-            giftee_id=user["giftee_id"],
-            santa_id=user["santa_id"],
+            giftee_id=int(user["giftee_id"]),
+            santa_id=int(user["santa_id"]),
         )
-        for user in data
+        for user in data["swapusers"]
     ]
 
 
+RevealFormat = Literal["text", "pretty", "graph"]
+RevealGraphLayout = Literal[
+    "circle",
+    "random",
+    "kamada_kawai",
+    "spring",
+    "spectral",
+]
+
+
 def reveal(
-    format: Literal["text", "pretty", "graph"],
+    format: RevealFormat,
     user_data: list[UserInfo],
-    graph_layout: Literal[
-        "circle",
-        "random",
-        "kamada_kawai",
-        "spring",
-        "spectral",
-        "randomize",  # as in, pick a random layout, don't use the "random" layout
-    ] = "spectral",
+    graph_layout: RevealGraphLayout = "spectral",
     count: int = 1,
-) -> Any:
+) -> str | list[bytes]:
     id_to_names: dict[int, str] = {user.user_id: user.name for user in user_data}
 
     if format == "text":
@@ -141,6 +144,7 @@ def reveal(
         # unconnected graphs
         # iterate through the graph neighbours and create lists of each cycle
         cycles = list(nx.simple_cycles(graph))
+        breakpoint()
         assert len(cycles) > 0, "No cycles found in graph"
 
         results = []
@@ -164,6 +168,9 @@ def reveal(
         return report
 
     else:
+
+        graph_bytes: list[bytes] = []
+
         for _g in range(count):
             graph = nx.DiGraph()
             plt.clf()
@@ -192,7 +199,9 @@ def reveal(
             with io.BytesIO() as f:
                 plt.savefig(f, pad_inches=0.1, transparent=False, bbox_inches="tight")
                 f.seek(0)
-                yield f
+                graph_bytes.append(f.read())
+
+        return graph_bytes
 
 
 def filter_emoji(s: str) -> str:
@@ -876,7 +885,7 @@ class Manage(discord.app_commands.Group):
     async def reveal_cmd(
         self,
         interaction: discord.Interaction[ClientT],
-        format: Literal["text", "pretty", "graph"],
+        format: RevealFormat,
         # option that allows you use one of the n+1 backups
         # from_backup: str | None = None,
         graph_layout: Literal[
@@ -963,10 +972,14 @@ class Manage(discord.app_commands.Group):
             for graph in reveal(
                 "graph", user_info, graph_layout=graph_layout, count=count
             ):
-                await user_obj.send(
-                    f"Reveal with {graph_layout}",
-                    file=discord.File(graph, "reveal.png"),
-                )
+                assert isinstance(graph, bytes)
+                with io.BytesIO() as f:
+                    f.write(graph)
+                    f.seek(0)
+                    await user_obj.send(
+                        f"Reveal with {graph_layout}",
+                        file=discord.File(f, "reveal.png"),
+                    )
 
     # @reveal_cmd.autocomplete("from_backup")
     # async def reveal_cmd_autocomplete(
