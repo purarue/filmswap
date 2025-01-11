@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import re
 import io
+import json
 import os
 import calendar
 import datetime
@@ -87,6 +88,22 @@ class UserInfo(NamedTuple):
     name: str
     giftee_id: int
     santa_id: int
+
+
+def get_users_from_backup(backup: str) -> list[UserInfo]:
+    filename = os.path.join(settings.BACKUP_DIR, backup)
+    with open(filename, "r") as f:
+        data = json.load(f)
+
+    return [
+        UserInfo(
+            user_id=user["user_id"],
+            name=user["name"],
+            giftee_id=user["giftee_id"],
+            santa_id=user["santa_id"],
+        )
+        for user in data
+    ]
 
 
 def reveal(
@@ -861,6 +878,8 @@ class Manage(discord.app_commands.Group):
         self,
         interaction: discord.Interaction[ClientT],
         format: Literal["text", "pretty", "graph"],
+        # option that allows you use one of the n+1 backups
+        from_backup: str | None = None,
         graph_layout: Literal[
             "circle",
             "random",
@@ -876,10 +895,17 @@ class Manage(discord.app_commands.Group):
         if await error_if_not_admin(interaction):
             return
 
-        all_users = list_users()
-        users_with_both = [
-            user for user in all_users if user.giftee_id and user.santa_id
-        ]
+        if from_backup is not None:
+            all_users = get_users_from_backup(from_backup)
+            users_with_both = [
+                user for user in all_users if user.giftee_id and user.santa_id
+            ]
+
+        else:
+            all_users = list_users()
+            users_with_both = [
+                user for user in all_users if user.giftee_id and user.santa_id
+            ]
 
         if len(users_with_both) == 0:
             await interaction.response.send_message(
@@ -937,6 +963,26 @@ class Manage(discord.app_commands.Group):
                     f"Reveal with {graph_layout}",
                     file=discord.File(graph, "reveal.png"),
                 )
+
+    # automcplete
+    @reveal_cmd.autocomplete("from_backup")
+    async def reveal_cmd_autocomplete(
+        self, interaction: discord.Interaction[ClientT], current: str
+    ) -> list[discord.app_commands.Choice[str]]:
+        # list the json files in the backups directory, parse the stem of the
+        # file from epoch time to current time
+        # and let the user pick one
+        files = Path(settings.BACKUP_DIR).glob("*.json")
+        choices = [file.stem for file in files if file.stem.isdigit()]
+        choices.sort(
+            key=lambda x: datetime.datetime.fromtimestamp(int(x)), reverse=True
+        )
+        return [
+            discord.app_commands.Choice(
+                name=str(datetime.datetime.fromtimestamp(int(choice))), value=choice
+            )
+            for choice in choices
+        ]
 
     @discord.app_commands.command(  # type: ignore[arg-type]
         name="backup-database", description="Backup the database"
