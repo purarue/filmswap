@@ -878,7 +878,7 @@ class Manage(discord.app_commands.Group):
         interaction: discord.Interaction[ClientT],
         format: Literal["text", "pretty", "graph"],
         # option that allows you use one of the n+1 backups
-        from_backup: str | None = None,
+        # from_backup: str | None = None,
         graph_layout: Literal[
             "circle",
             "random",
@@ -894,19 +894,18 @@ class Manage(discord.app_commands.Group):
         if await error_if_not_admin(interaction):
             return
 
-        logger.info(from_backup)
+        # logger.info(from_backup)
+        #
+        # if from_backup is not None:
+        #     all_users = get_users_from_backup(from_backup)
+        #     users_with_both = [
+        #         user for user in all_users if user.giftee_id and user.santa_id
+        #     ]
 
-        if from_backup is not None:
-            all_users = get_users_from_backup(from_backup)
-            users_with_both = [
-                user for user in all_users if user.giftee_id and user.santa_id
-            ]
-
-        else:
-            all_users = list_users()
-            users_with_both = [
-                user for user in all_users if user.giftee_id and user.santa_id
-            ]
+        all_users = list_users()
+        users_with_both = [
+            user for user in all_users if user.giftee_id and user.santa_id
+        ]
 
         if len(users_with_both) == 0:
             await interaction.response.send_message(
@@ -969,30 +968,30 @@ class Manage(discord.app_commands.Group):
                     file=discord.File(graph, "reveal.png"),
                 )
 
-    @reveal_cmd.autocomplete("from_backup")
-    async def reveal_cmd_autocomplete(
-        self, interaction: discord.Interaction[ClientT], current: str
-    ) -> list[discord.app_commands.Choice[str]]:
-        # list the json files in the backups directory, parse the stem of the
-        # file from epoch time to current time
-        # and let the user pick one
-        files = Path(settings.BACKUP_DIR).glob("*.json")
-        choices: list[Path] = [file for file in files if file.stem.isdigit()]
-        choices.sort(
-            key=lambda x: datetime.datetime.fromtimestamp(int(x.stem)), reverse=True
-        )
-        items = [
-            discord.app_commands.Choice(
-                name=datetime.datetime.fromtimestamp(int(choice.stem)).strftime(
-                    "%Y_%m_%dT%H_%M%p"
-                ),
-                value=str(choice.name),
-            )
-            for choice in choices
-        ]
-        if query := current.strip():
-            items = [c for c in items if query in c.name]
-        return items[:5]
+    # @reveal_cmd.autocomplete("from_backup")
+    # async def reveal_cmd_autocomplete(
+    #     self, interaction: discord.Interaction[ClientT], current: str
+    # ) -> list[discord.app_commands.Choice[str]]:
+    #     # list the json files in the backups directory, parse the stem of the
+    #     # file from epoch time to current time
+    #     # and let the user pick one
+    #     files = Path(settings.BACKUP_DIR).glob("*.json")
+    #     choices: list[Path] = [file for file in files if file.stem.isdigit()]
+    #     choices.sort(
+    #         key=lambda x: datetime.datetime.fromtimestamp(int(x.stem)), reverse=True
+    #     )
+    #     items = [
+    #         discord.app_commands.Choice(
+    #             name=datetime.datetime.fromtimestamp(int(choice.stem)).strftime(
+    #                 "%Y_%m_%dT%H_%M%p"
+    #             ),
+    #             value=str(choice.name),
+    #         )
+    #         for choice in choices
+    #     ]
+    #     if query := current.strip():
+    #         items = [c for c in items if query in c.name]
+    #     return items[:5]
 
     @discord.app_commands.command(  # type: ignore[arg-type]
         name="backup-database", description="Backup the database"
