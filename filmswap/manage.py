@@ -7,7 +7,7 @@ import calendar
 import datetime
 import random
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Any, NamedTuple
 
 import networkx as nx  # type: ignore[import]
 import matplotlib.pyplot as plt  # type: ignore[import]
@@ -42,6 +42,15 @@ from ._types import ClientT
 DISABLE_UNMATCH = True
 
 
+GRAPH_LAYOUTS = {
+    "circle": nx.circular_layout,
+    "random": nx.random_layout,
+    "kamada_kawai": nx.kamada_kawai_layout,
+    "spring": nx.spring_layout,
+    "spectral": nx.spectral_layout,
+}
+
+
 def list_users() -> list[SwapUser]:
     with Session(engine) as session:  # type: ignore[attr-defined]
         return session.query(SwapUser).all()  # type: ignore[no-any-return]
@@ -69,7 +78,105 @@ def users_without_santas() -> list[SwapUser]:
 
 def users_not_done_watching() -> list[SwapUser]:
     with Session(engine) as session:  # type: ignore[attr-defined]
+
         return session.query(SwapUser).filter_by(done_watching=False).filter(SwapUser.letter.is_not(None)).all()  # type: ignore[no-any-return,attr-defined]
+
+
+class UserInfo(NamedTuple):
+    user_id: int
+    name: str
+    giftee_id: int
+    santa_id: int
+
+
+def reveal(
+    format: Literal["text", "pretty", "graph"],
+    user_data: list[UserInfo],
+    graph_layout: Literal[
+        "circle",
+        "random",
+        "kamada_kawai",
+        "spring",
+        "spectral",
+        "randomize",  # as in, pick a random layout, don't use the "random" layout
+    ] = "spectral",
+    count: int = 1,
+) -> Any:
+
+    id_to_names: dict[int, str] = {user.user_id: user.name for user in user_data}
+
+    if format == "text":
+        report = os.linesep.join(
+            f"{id_to_names.get(user.user_id, user.user_id)} is gifting to {id_to_names.get(user.giftee_id, user.giftee_id)} and is being gifted by {id_to_names.get(user.santa_id, user.santa_id)}"  # type: ignore[arg-type]
+            for user in user_data
+        )
+        return report
+
+    elif format == "pretty":
+        graph = nx.DiGraph()
+        for user in user_data:
+            assert user.giftee_id is not None
+            graph.add_edge(
+                user.user_id,
+                user.giftee_id,
+            )
+
+        # in case we had people who joined late, we need to check for multiple
+        # unconnected graphs
+        # iterate through the graph neighbours and create lists of each cycle
+        cycles = list(nx.simple_cycles(graph))
+        assert len(cycles) > 0, "No cycles found in graph"
+
+        results = []
+        for cycle in cycles:
+            names = []
+            assert len(cycle) > 0, "Empty cycle found in graph"
+            # add the first user
+            names.append(id_to_names.get(cycle[0]))
+            for from_user in cycle:
+                # get the user this was sent to
+                to_user_list = list(graph.neighbors(from_user))
+                assert (
+                    len(to_user_list) == 1
+                ), "More than one neighbour found when generating links"
+                to_user = id_to_names.get(to_user_list[0])
+                assert to_user is not None, f"No user found for ID {to_user_list[0]}"
+                names.append(to_user)
+            results.append("➜".join([f"`{name}`" for name in names]))
+
+        report = (os.linesep * 2).join(results)
+        return report
+
+    else:
+        for _g in range(count):
+            graph = nx.DiGraph()
+            plt.clf()
+            for user in user_data:
+                assert user.giftee_id is not None
+                graph.add_edge(
+                    filter_emoji(user.name),
+                    filter_emoji(id_to_names[user.giftee_id]),
+                    color="red",
+                )
+
+            options = {
+                "node_color": "blue",
+                "node_size": 1,
+                "edge_color": "#a9a9a9",
+                "width": 3,
+                "arrowstyle": "-|>",
+                "arrowsize": 13,
+                "font_size": 8,
+                "font_color": "black",
+            }
+
+            pos = GRAPH_LAYOUTS[graph_layout](graph)
+            nx.draw_networkx(graph, pos, arrows=True, **options)
+            plt.box(False)
+            with io.BytesIO() as f:
+                plt.savefig(f, pad_inches=0.1, transparent=False, bbox_inches="tight")
+                f.seek(0)
+                yield f
 
 
 def filter_emoji(s: str) -> str:
@@ -750,7 +857,7 @@ class Manage(discord.app_commands.Group):
     @discord.app_commands.command(  # type: ignore[arg-type]
         name="reveal", description="Reveal the connections between giftee/santas"
     )
-    async def reveal(
+    async def reveal_cmd(
         self,
         interaction: discord.Interaction[ClientT],
         format: Literal["text", "pretty", "graph"],
@@ -784,117 +891,52 @@ class Manage(discord.app_commands.Group):
             f"Sending reveal to {interaction.user.display_name}", ephemeral=True
         )
 
-        id_to_names: dict[int, str] = {
-            user.user_id: user.name for user in users_with_both
-        }
-
         bot = self.get_bot()
         user_obj = await bot.fetch_user(interaction.user.id)
 
-        if format == "text":
-            report = os.linesep.join(
-                f"{id_to_names.get(user.user_id, user.user_id)} is gifting to {id_to_names.get(user.giftee_id, user.giftee_id)} and is being gifted by {id_to_names.get(user.santa_id, user.santa_id)}"  # type: ignore[arg-type]
-                for user in users_with_both
+        user_info = [
+            UserInfo(
+                user_id=user.user_id,  # type: ignore[arg-type]
+                name=user.name,  # type: ignore[arg-type]
+                giftee_id=user.giftee_id,  # type: ignore[arg-type]
+                santa_id=user.santa_id,  # type: ignore[arg-type]
             )
+            for user in users_with_both
+        ]
+
+        if format == "text":
+            reveal_text = reveal("text", user_info)
+            assert isinstance(reveal_text, str)
             with io.BytesIO() as f:
-                f.write(report.encode("utf-8"))
+                f.write(reveal_text.encode("utf-8"))
                 f.seek(0)
                 await interaction.user.send(file=discord.File(f, "report.txt"))
 
         elif format == "pretty":
-            graph = nx.DiGraph()
-            for user in users_with_both:
-                assert user.giftee_id is not None
-                graph.add_edge(
-                    user.user_id,
-                    user.giftee_id,
-                )
-
-            # in case we had people who joined late, we need to check for multiple
-            # unconnected graphs
-            # iterate through the graph neighbours and create lists of each cycle
-            cycles = list(nx.simple_cycles(graph))
-            assert len(cycles) > 0, "No cycles found in graph"
-
-            results = []
-            for cycle in cycles:
-                names = []
-                assert len(cycle) > 0, "Empty cycle found in graph"
-                # add the first user
-                names.append(id_to_names.get(cycle[0]))
-                for from_user in cycle:
-                    # get the user this was sent to
-                    to_user_list = list(graph.neighbors(from_user))
-                    assert (
-                        len(to_user_list) == 1
-                    ), "More than one neighbour found when generating links"
-                    to_user = id_to_names.get(to_user_list[0])
-                    assert (
-                        to_user is not None
-                    ), f"No user found for ID {to_user_list[0]}"
-                    names.append(to_user)
-                results.append("➜".join([f"`{name}`" for name in names]))
-
-            report = (os.linesep * 2).join(results)
+            report = reveal("pretty", user_info)
+            assert isinstance(report, str)
 
             await interaction.user.send("Copy-Paste this into Discord:")
             with io.BytesIO() as f:
                 f.write(report.encode("utf-8"))
                 f.seek(0)
                 await interaction.user.send(file=discord.File(f, "pretty.txt"))
-
         else:
-            for _g in range(count):
-                graph = nx.DiGraph()
-                plt.clf()
-                for user in users_with_both:
-                    assert user.giftee_id is not None
-                    graph.add_edge(
-                        filter_emoji(user.name),
-                        filter_emoji(id_to_names[user.giftee_id]),
-                        color="red",
-                    )
+            if graph_layout == "randomize":
+                graph_layout = random.choice(list(GRAPH_LAYOUTS.keys()))  # type: ignore[arg-type]
 
-                options = {
-                    "node_color": "blue",
-                    "node_size": 1,
-                    "edge_color": "#a9a9a9",
-                    "width": 3,
-                    "arrowstyle": "-|>",
-                    "arrowsize": 13,
-                    "font_size": 8,
-                    "font_color": "black",
-                }
+            if graph_layout not in GRAPH_LAYOUTS:
+                return await interaction.response.send_message(
+                    f"Error: Unknown graph layout {graph_layout}", ephemeral=True
+                )
 
-                func = {
-                    "circle": nx.circular_layout,
-                    "random": nx.random_layout,
-                    "kamada_kawai": nx.kamada_kawai_layout,
-                    "spring": nx.spring_layout,
-                    "spectral": nx.spectral_layout,
-                }
-                if graph_layout in func:
-                    layout_name = graph_layout
-                    pos = func[graph_layout](graph)
-                elif graph_layout == "randomize":
-                    chosen_func = random.choice(list(func.values()))
-                    layout_name = chosen_func.__name__
-                    pos = chosen_func(graph)
-                else:
-                    return await interaction.response.send_message(
-                        f"Error: Unknown graph layout {graph_layout}", ephemeral=True
-                    )
-                nx.draw_networkx(graph, pos, arrows=True, **options)
-                plt.box(False)
-                with io.BytesIO() as f:
-                    plt.savefig(
-                        f, pad_inches=0.1, transparent=False, bbox_inches="tight"
-                    )
-                    f.seek(0)
-                    await user_obj.send(
-                        f"Reveal with {layout_name}",
-                        file=discord.File(f, "reveal.png"),
-                    )
+            for graph in reveal(
+                "graph", user_info, graph_layout=graph_layout, count=count
+            ):
+                await user_obj.send(
+                    f"Reveal with {graph_layout}",
+                    file=discord.File(graph, "reveal.png"),
+                )
 
     @discord.app_commands.command(  # type: ignore[arg-type]
         name="backup-database", description="Backup the database"
