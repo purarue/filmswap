@@ -79,7 +79,6 @@ def users_without_santas() -> list[SwapUser]:
 
 def users_not_done_watching() -> list[SwapUser]:
     with Session(engine) as session:  # type: ignore[attr-defined]
-
         return session.query(SwapUser).filter_by(done_watching=False).filter(SwapUser.letter.is_not(None)).all()  # type: ignore[no-any-return,attr-defined]
 
 
@@ -92,6 +91,7 @@ class UserInfo(NamedTuple):
 
 def get_users_from_backup(backup: str) -> list[UserInfo]:
     filename = os.path.join(settings.BACKUP_DIR, backup)
+    assert os.path.exists(filename), f"{filename} does not exist"
     with open(filename, "r") as f:
         data = json.load(f)
 
@@ -119,7 +119,6 @@ def reveal(
     ] = "spectral",
     count: int = 1,
 ) -> Any:
-
     id_to_names: dict[int, str] = {user.user_id: user.name for user in user_data}
 
     if format == "text":
@@ -895,6 +894,8 @@ class Manage(discord.app_commands.Group):
         if await error_if_not_admin(interaction):
             return
 
+        logger.info(from_backup)
+
         if from_backup is not None:
             all_users = get_users_from_backup(from_backup)
             users_with_both = [
@@ -912,6 +913,8 @@ class Manage(discord.app_commands.Group):
                 "Error: No users have both a giftee and a santa", ephemeral=True
             )
             return
+        else:
+            logger.info(f"Processing {reveal} for {len(users_with_both)} users")
 
         await interaction.response.send_message(
             f"Sending reveal to {interaction.user.display_name}", ephemeral=True
@@ -929,6 +932,8 @@ class Manage(discord.app_commands.Group):
             )
             for user in users_with_both
         ]
+
+        logger.info(user_info)
 
         if format == "text":
             reveal_text = reveal("text", user_info)
@@ -964,7 +969,6 @@ class Manage(discord.app_commands.Group):
                     file=discord.File(graph, "reveal.png"),
                 )
 
-    # automcplete
     @reveal_cmd.autocomplete("from_backup")
     async def reveal_cmd_autocomplete(
         self, interaction: discord.Interaction[ClientT], current: str
@@ -973,16 +977,22 @@ class Manage(discord.app_commands.Group):
         # file from epoch time to current time
         # and let the user pick one
         files = Path(settings.BACKUP_DIR).glob("*.json")
-        choices = [file.stem for file in files if file.stem.isdigit()]
+        choices: list[Path] = [file for file in files if file.stem.isdigit()]
         choices.sort(
-            key=lambda x: datetime.datetime.fromtimestamp(int(x)), reverse=True
+            key=lambda x: datetime.datetime.fromtimestamp(int(x.stem)), reverse=True
         )
-        return [
+        items = [
             discord.app_commands.Choice(
-                name=str(datetime.datetime.fromtimestamp(int(choice))), value=choice
+                name=datetime.datetime.fromtimestamp(int(choice.stem)).strftime(
+                    "%Y_%m_%dT%H_%M%p"
+                ),
+                value=str(choice.name),
             )
             for choice in choices
         ]
+        if query := current.strip():
+            items = [c for c in items if query in c.name]
+        return items[:5]
 
     @discord.app_commands.command(  # type: ignore[arg-type]
         name="backup-database", description="Backup the database"
