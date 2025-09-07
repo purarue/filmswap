@@ -48,6 +48,7 @@ python3 -m virtualenv .venv -p ~/.pyenv/versions/3.11.3/bin/python
 source ./.venv/bin/activate
 # to leave, type 'deactivate'
 pip install -r ./requirements.txt
+pip install .
 # once all is installed:
 # generate locales if necessary:
 make

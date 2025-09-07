@@ -1,0 +1,58 @@
+[project]
+name = "filmswap"
+version = "0.1.0"
+description = "bot to swap films to watch anonymously"
+authors = [{ name = "purarue" }]
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+classifiers = [
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+Homepage = "https://github.com/purarue/filmswap"
+
+[tool.setuptools.packages.find]
+include = ["filmswap"]
+exclude = []
+
+[project.optional-dependencies]
+testing = ["mypy", "flake8"]
+
+[tool.setuptools]
+package-data = { "filmswap" = ["py.typed"] }
+zip-safe = false
+
+[project.entry-points."console_scripts"]
+filmswap = "filmswap.__main__:main"
+
+[tool.mypy]
+pretty = true
+show_error_context = true
+show_error_codes = true
+check_untyped_defs = true
+namespace_packages = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+plugins = ["sqlmypy"]
+
+[tool.pytest.ini_options]
+addopts = "--verbose tests"
