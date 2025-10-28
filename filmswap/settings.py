@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # can set these to empty strings to disable
     PRESENCE_TYPE: str = "watching"
     PRESENCE_STATUS: str = "kino, using /help"
+    SWAP_THREAD_MONTH_ORDER: bool = False
 
     class Config:
         case_sensitive = False

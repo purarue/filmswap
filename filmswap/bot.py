@@ -4,7 +4,6 @@ from logzero import logger  # type: ignore[import]
 import os
 import asyncio
 import discord
-import discord.abc
 from discord.ext import commands
 from gettext import gettext as _
 
